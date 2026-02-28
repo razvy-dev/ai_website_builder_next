@@ -2,7 +2,8 @@ import subprocess
 from pathlib import Path
 
 
-NEXTJS_ENV_TEMPLATE = """# Next.js - Public (exposed to browser)
+NEXTJS_ENV_TEMPLATE = """
+# Next.js - Public (exposed to browser)
 NEXT_PUBLIC_SANITY_PROJECT_ID={project_id}
 NEXT_PUBLIC_SANITY_DATASET=production
 NEXT_PUBLIC_SANITY_API_VERSION=2024-12-01
@@ -13,7 +14,8 @@ NEXT_PUBLIC_SANITY_STUDIO_URL={studio_url}
 SANITY_VIEWER_TOKEN={viewer_token}
 """
 
-SANITY_ENV_TEMPLATE = """# Sanity Studio - Private (used by Studio)
+SANITY_ENV_TEMPLATE = """
+# Sanity Studio - Private (used by Studio)
 SANITY_PROJECT_ID={project_id}
 SANITY_DATASET=production
 

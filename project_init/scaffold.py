@@ -1,153 +1,10 @@
 from pathlib import Path
 
 
-SANITY_CLIENT_TEMPLATE = """import { createClient } from "next-sanity";
-
-export const client = createClient({
-  projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID,
-  dataset: process.env.NEXT_PUBLIC_SANITY_DATASET,
-  apiVersion: process.env.NEXT_PUBLIC_SANITY_API_VERSION || "2024-12-01",
-  useCdn: true,
-  token: process.env.SANITY_VIEWER_TOKEN,
-  stega: {
-    studioUrl: process.env.NEXT_PUBLIC_SANITY_STUDIO_URL,
-  },
-});
-
-export const urlFor = (source: any) => {
-  if (!source) return null;
-  try {
-    return builder.image(source);
-  } catch {
-    return null;
-  }
-};
-
-import { createImageUrlBuilder } from "next-sanity";
-const builder = createImageUrlBuilder(client);
-"""
-
-TOKEN_HELPER_TEMPLATE = """import { client } from "./client";
-
-export const token = process.env.SANITY_VIEWER_TOKEN;
-
-export function getClient() {
-  return client;
-}
-"""
-
-ENABLE_DRAFT_MODE_TEMPLATE = """import { defineEnableDraftMode } from "next-sanity/draft-mode";
-import { client } from "@/sanity/lib/client";
-import { token } from "@/sanity/lib/token";
-
-export const { GET } = defineEnableDraftMode({
-  client: client.withConfig({ token }),
-});
-"""
-
-DISABLE_DRAFT_MODE_TEMPLATE = """import { defineDisableDraftMode } from "next-sanity/draft-mode";
-import { client } from "@/sanity/lib/client";
-
-export const { GET } = defineDisableDraftMode({ client });
-"""
-
-DISABLE_DRAFT_MODE_COMPONENT_TEMPLATE = """"use client";
-
-import { useDraftModeEnvironment } from "next-sanity/hooks";
-import { useRouter } from "next/navigation";
-
-export function DisableDraftMode() {
-  const environment = useDraftModeEnvironment();
-  const router = useRouter();
-
-  if (environment !== "live" && environment !== "unknown") {
-    return null;
-  }
-
-  return (
-    <button
-      onClick={() => {
-        router.push("/api/draft-mode/disable");
-      }}
-      style={{
-        position: "fixed",
-        bottom: "20px",
-        right: "20px",
-        padding: "10px 20px",
-        background: "#000",
-        color: "#fff",
-        border: "none",
-        borderRadius: "5px",
-        cursor: "pointer",
-        zIndex: 9999,
-      }}
-    >
-      Exit Draft Mode
-    </button>
-  );
-}
-"""
-
-LAYOUT_TEMPLATE = """import { VisualEditing } from "next-sanity/visual-editing";
-import { draftMode } from "next/headers";
-import { DisableDraftMode } from "@/components/DisableDraftMode";
-import { SanityLive } from "@/sanity/lib/live";
-import "./globals.css";
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html lang="en">
-      <body>
-        {children}
-        {(await draftMode()).isEnabled && (
-          <>
-            <DisableDraftMode />
-            <VisualEditing />
-          </>
-        )}
-        <SanityLive />
-      </body>
-    </html>
-  );
-}
-"""
-
-SANITY_LIVE_TEMPLATE = """import { defineLive } from "next-sanity/live";
-
-export const { SanityLive, useLive } = defineLive({
-  client: import("./client").then((mod) => mod.client),
-});
-"""
-
-SANITY_CONFIG_TEMPLATE = """import { defineConfig } from "sanity";
-import { structureTool } from "sanity/structure";
-import { presentationTool } from "sanity/presentation";
-
-export default defineConfig({
-  name: "{project_name}",
-  title: "{project_title}",
-  projectId: process.env.SANITY_PROJECT_ID,
-  dataset: process.env.SANITY_DATASET || "production",
-  basePath: "/studio",
-  plugins: [
-    structureTool(),
-    presentationTool({
-      previewUrl: {
-        origin: process.env.SANITY_STUDIO_PREVIEW_ORIGIN || "http://localhost:3000",
-        preview: "/",
-        previewMode: {
-          enable: "/api/draft-mode/enable",
-          disable: "/api/draft-mode/disable",
-        },
-      },
-    }),
-  ],
-});
-"""
+def read_template(relative_path: str) -> str:
+    """Read a template file from assets/templates."""
+    template_dir = Path(__file__).resolve().parent.parent / "assets" / "templates"
+    return (template_dir / relative_path).read_text()
 
 
 def create_sanity_client(output_dir: Path) -> None:
@@ -155,10 +12,10 @@ def create_sanity_client(output_dir: Path) -> None:
     src_dir = output_dir / "frontend" / "src" / "sanity" / "lib"
     src_dir.mkdir(parents=True, exist_ok=True)
 
-    (src_dir / "client.ts").write_text(SANITY_CLIENT_TEMPLATE)
+    (src_dir / "client.ts").write_text(read_template("sanity/client.ts"))
     print(f"  Created: {src_dir / 'client.ts'}")
 
-    (src_dir / "token.ts").write_text(TOKEN_HELPER_TEMPLATE)
+    (src_dir / "token.ts").write_text(read_template("sanity/token.ts"))
     print(f"  Created: {src_dir / 'token.ts'}")
 
 
@@ -167,20 +24,32 @@ def create_live_mode(output_dir: Path) -> None:
     src_dir = output_dir / "frontend" / "src" / "sanity" / "lib"
     src_dir.mkdir(parents=True, exist_ok=True)
 
-    (src_dir / "live.ts").write_text(SANITY_LIVE_TEMPLATE)
+    (src_dir / "live.ts").write_text(read_template("sanity/live.ts"))
     print(f"  Created: {src_dir / 'live.ts'}")
+
+
+def create_fetch_helper(output_dir: Path) -> None:
+    """Create the sanityFetch helper for draft mode."""
+    src_dir = output_dir / "frontend" / "src" / "sanity" / "lib"
+    src_dir.mkdir(parents=True, exist_ok=True)
+
+    (src_dir / "fetch.ts").write_text(read_template("sanity/fetch.ts"))
+    print(f"  Created: {src_dir / 'fetch.ts'}")
 
 
 def create_draft_mode_routes(output_dir: Path) -> None:
     """Create enable/disable draft mode API routes."""
     api_dir = output_dir / "frontend" / "src" / "app" / "api" / "draft-mode"
-    api_dir.mkdir(parents=True, exist_ok=True)
 
-    (api_dir / "enable" / "route.ts").write_text(ENABLE_DRAFT_MODE_TEMPLATE)
-    print(f"  Created: {api_dir / 'enable' / 'route.ts'}")
+    enable_dir = api_dir / "enable"
+    enable_dir.mkdir(parents=True, exist_ok=True)
+    (enable_dir / "route.ts").write_text(read_template("nextjs/enable-draft.ts"))
+    print(f"  Created: {enable_dir / 'route.ts'}")
 
-    (api_dir / "disable" / "route.ts").write_text(DISABLE_DRAFT_MODE_TEMPLATE)
-    print(f"  Created: {api_dir / 'disable' / 'route.ts'}")
+    disable_dir = api_dir / "disable"
+    disable_dir.mkdir(parents=True, exist_ok=True)
+    (disable_dir / "route.ts").write_text(read_template("nextjs/disable-draft.ts"))
+    print(f"  Created: {disable_dir / 'route.ts'}")
 
 
 def create_disable_draft_mode_component(output_dir: Path) -> None:
@@ -189,7 +58,7 @@ def create_disable_draft_mode_component(output_dir: Path) -> None:
     components_dir.mkdir(parents=True, exist_ok=True)
 
     (components_dir / "DisableDraftMode.tsx").write_text(
-        DISABLE_DRAFT_MODE_COMPONENT_TEMPLATE
+        read_template("components/DisableDraftMode.tsx")
     )
     print(f"  Created: {components_dir / 'DisableDraftMode.tsx'}")
 
@@ -199,7 +68,7 @@ def update_layout(output_dir: Path) -> None:
     layout_path = output_dir / "frontend" / "src" / "app" / "layout.tsx"
 
     if layout_path.exists():
-        layout_path.write_text(LAYOUT_TEMPLATE)
+        layout_path.write_text(read_template("nextjs/layout.tsx"))
         print(f"  Updated: {layout_path}")
     else:
         print(f"  Warning: {layout_path} not found, skipping layout update")
@@ -211,9 +80,10 @@ def create_sanity_config(output_dir: Path, project_name: str) -> None:
 
     config_path = studio_dir / "sanity.config.ts"
 
-    config_content = SANITY_CONFIG_TEMPLATE.format(
-        project_name=project_name.lower().replace(" ", "-"),
-        project_title=project_name,
+    config_content = (
+        read_template("sanity/sanity.config.ts")
+        .replace("__PROJECT_NAME__", project_name.lower().replace(" ", "-"))
+        .replace("__PROJECT_TITLE__", project_name)
     )
 
     config_path.write_text(config_content)
@@ -247,6 +117,7 @@ def setup_visual_editing(output_dir: Path, project_name: str) -> None:
     print("\nSetting up Visual Editing...")
 
     create_sanity_client(output_dir)
+    create_fetch_helper(output_dir)
     create_live_mode(output_dir)
     create_draft_mode_routes(output_dir)
     create_disable_draft_mode_component(output_dir)
