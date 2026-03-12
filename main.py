@@ -2,6 +2,7 @@
 """AI Website Builder - Main Entry Point"""
 
 from project_init.main import main as init_project
+from figma_worker.main import main as figma_integration
 
 
 def main():
@@ -20,7 +21,7 @@ def main():
     if choice == "1":
         init_project()
     elif choice == "2":
-        print("Figma integration not yet implemented.")
+        figma_integration()
     elif choice == "3":
         print("AI component generation not yet implemented.")
     elif choice == "4":

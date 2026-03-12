@@ -1,6 +1,5 @@
 # models.py
-from __future__ import annotations
-from typing import Optional, List
+from typing import List, Optional
 from sqlmodel import Field, Relationship, SQLModel, create_engine, Session
 
 
