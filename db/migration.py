@@ -84,6 +84,28 @@ class Frame(SQLModel, table=True):
 
 
 # ─────────────────────────────────────────────────────────────
+# SECTION COMPONENTS (nested subframes promoted as components)
+# ─────────────────────────────────────────────────────────────
+
+class SectionComponent(SQLModel, table=True):
+    __tablename__ = "section_components"
+
+    node_id: str = Field(primary_key=True)  # Figma node ID for the section frame
+    page_id: str = Field(foreign_key="pages.page_id")
+    root_frame_id: str = Field(foreign_key="frames.frame_id")  # top-level frame
+    parent_node_id: Optional[str] = Field(
+        default=None, foreign_key="section_components.node_id"
+    )
+    depth: int = 0  # distance from the root frame
+    order: int = 0  # sibling order within its parent
+    name: str = ""
+    width: Optional[float] = None
+    height: Optional[float] = None
+    raw_node_json: str = "{}"  # serialized Figma node for hydration
+    screenshot: Optional[str] = None
+
+
+# ─────────────────────────────────────────────────────────────
 # COMPONENT USAGES  (junction: which component is used where)
 # ─────────────────────────────────────────────────────────────
 
@@ -148,4 +170,18 @@ def create_db_and_tables(db_path: str = "figma.db") -> Session:
         connect_args={"check_same_thread": False},
     )
     SQLModel.metadata.create_all(engine)
+    _ensure_section_component_screenshot_column(engine)
     return Session(engine)
+
+
+def _ensure_section_component_screenshot_column(engine) -> None:
+    """Add the screenshot column if it was missing (pre-section-screenshot schema)."""
+
+    with engine.connect() as conn:
+        result = conn.exec_driver_sql("PRAGMA table_info('section_components')").fetchall()
+
+    if any(column[1] == "screenshot" for column in result):
+        return
+
+    with engine.begin() as conn:
+        conn.exec_driver_sql("ALTER TABLE section_components ADD COLUMN screenshot TEXT")

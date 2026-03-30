@@ -36,11 +36,10 @@ def main():
 
     figma_connection.get_file()
 
-    figma_connection.seed_definitions()
-
-    figma_connection.traverse_pages()
-
-    figma_connection.hydrate_components()
+    # figma_connection.hydrate_components()
 
 if __name__ == "__main__":
     main()
+
+
+
