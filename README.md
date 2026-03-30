@@ -18,15 +18,32 @@ The system transforms design into working code — setting up everything from th
 ## Project Architecture
 
 ### 1. Automated Project Generation
-The system programmatically creates a full **Next.js + Sanity** environment.  
-It performs the following tasks:
+The system uses the **official Sanity Next.js Clean template** to create a production-ready environment.
 
-- Initializes a boilerplate project with all base files and dependencies.  
-- Configures `.env` variables for both Next.js and Sanity.  
-- Connects Sanity previews automatically.  
-- Creates a new Git repository and relevant documentation files (e.g., setup guides, project structure notes).
+**Template Source:** [sanity-io/sanity-template-nextjs-clean](https://www.sanity.io/templates/nextjs-sanity-clean)
 
-The output of this step is a working, deployable project structure ready for AI-driven development.
+The template provides:
+- **Next.js 16** with App Router for optimal performance
+- **Sanity Studio** with Visual Editing capabilities
+- **Live Content API** for real-time content updates without rebuilds
+- **Presentation Tool** for live preview and editing
+- Pre-configured schema (Page, Post, Person, Settings)
+- Drag-and-drop page builder with visual editing
+- Automatic environment configuration
+- Integrated Unsplash support for media
+
+**Setup Command:**
+```bash
+python -m project_init.main
+```
+
+This command:
+1. Checks Sanity CLI authentication (prompts login if needed)
+2. Runs `npm create sanity@latest -- --template sanity-io/sanity-template-nextjs-clean`
+3. Extracts project configuration automatically
+4. Provides clear next steps and documentation links
+
+The output is a fully functional, production-ready project with Visual Editing, Live Content API, and best practices built-in.
 
 ---
 
@@ -90,12 +107,20 @@ Ultimately, the system seeks to turn design prototypes into production-grade cod
 ---
 
 ## Current Status
-Project phase: **Concept and architecture design**  
+Project phase: **Active Development**  
 
-Initial focus areas:
-- Automated boilerplate generation (Next.js + Sanity).  
-- Reliable Figma data extraction pipeline.  
-- Prototype orchestration of AI worker agents for component-level development.
+**Completed:**
+- ✅ Automated project setup using official Sanity Next.js Clean template
+- ✅ Visual Editing and Live Content API integration
+- ✅ Figma data extraction pipeline
+
+**In Progress:**
+- 🔄 AI worker orchestration for component generation
+- 🔄 Component validation and refinement system
+
+**Next Steps:**
+- Assembly and page generation
+- Sitemap and routing automation
 
 ---
 

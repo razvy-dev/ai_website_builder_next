@@ -1,1 +1,0 @@
-# this script will initialize everything related to the git repository of the generated website

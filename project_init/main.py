@@ -3,16 +3,6 @@ import os
 import subprocess
 
 from .runner import run, run_capture
-from .env_writer import write_env_files
-from .scaffold import setup_visual_editing
-
-
-SANITY_TEMPLATES = [
-    ("clean", "Empty Studio (clean slate)"),
-    ("blog", "Blog (posts, authors, categories)"),
-    ("moviedb", "Movie Database (movies, actors, directors)"),
-    ("shopify", "Shopify (products, collections, categories)"),
-]
 
 
 def is_sanity_authenticated() -> bool:
@@ -33,170 +23,196 @@ def is_sanity_authenticated() -> bool:
     return False
 
 
-def get_sanity_projects() -> list[dict]:
-    """Get list of Sanity projects by parsing CLI output."""
-    try:
-        result = run_capture(["npx", "sanity@latest", "projects", "list"])
-        if result.returncode == 0:
-            lines = result.stdout.strip().split("\n")
-            projects = []
-            for line in lines[2:]:  # Skip header and separator
-                if line.strip():
-                    parts = line.split()
-                    if len(parts) >= 4:
-                        project_id = parts[0]
-                        name = parts[3] if len(parts) > 3 else "Unnamed"
-                        projects.append({"projectId": project_id, "name": name})
-            return projects
-    except Exception:
-        pass
-    return []
+def check_sanity_cli() -> bool:
+    """Check if user is logged into Sanity CLI."""
+    if not is_sanity_authenticated():
+        print("\n⚠️  You need to be logged into Sanity CLI to use this template.")
+        print("\nPlease run one of the following:")
+        print("  npx sanity login")
+        print("  or set SANITY_AUTH_TOKEN environment variable")
+        
+        choice = input("\nWould you like to login now? (y/n): ").strip().lower()
+        if choice == 'y':
+            try:
+                run(["npx", "sanity@latest", "login"], cwd=".")
+                return True
+            except Exception as e:
+                print(f"\n✗ Login failed: {e}")
+                return False
+        return False
+    return True
+
+
+def get_project_config(project_dir: Path) -> dict | None:
+    """Extract Sanity project configuration from the created project."""
+    # Try to find sanity.cli.ts or sanity.config.ts
+    config_files = [
+        project_dir / "sanity.cli.ts",
+        project_dir / "sanity.config.ts",
+        project_dir / "studio" / "sanity.cli.ts",
+        project_dir / "studio" / "sanity.config.ts",
+    ]
+    
+    for config_file in config_files:
+        if config_file.exists():
+            try:
+                content = config_file.read_text()
+                # Extract projectId from config
+                import re
+                project_match = re.search(r"projectId:\s*['\"]([^'\"]+)['\"]|SANITY_PROJECT_ID\s*:\s*['\"]([^'\"]+)['\"]", content)
+                dataset_match = re.search(r"dataset:\s*['\"]([^'\"]+)['\"]|SANITY_DATASET\s*:\s*['\"]([^'\"]+)['\"]", content)
+                
+                if project_match:
+                    project_id = project_match.group(1) or project_match.group(2)
+                    dataset = dataset_match.group(1) or dataset_match.group(2) if dataset_match else "production"
+                    return {"projectId": project_id, "dataset": dataset}
+            except Exception:
+                pass
+    
+    # Try .env files
+    env_files = [
+        project_dir / ".env",
+        project_dir / ".env.local",
+        project_dir / "studio" / ".env",
+    ]
+    
+    for env_file in env_files:
+        if env_file.exists():
+            try:
+                content = env_file.read_text()
+                lines = content.split("\n")
+                config = {}
+                for line in lines:
+                    if "PROJECT_ID" in line and "=" in line:
+                        config["projectId"] = line.split("=", 1)[1].strip().strip('"\'')
+                    if "DATASET" in line and "=" in line:
+                        config["dataset"] = line.split("=", 1)[1].strip().strip('"\'')
+                if config.get("projectId"):
+                    return config
+            except Exception:
+                pass
+    
+    return None
 
 
 def main():
-    project_name = str(input("Enter this project's name: "))
-
-    BUILDER_ROOT = Path(__file__).resolve().parent.parent
+    """Main function following official Sanity Next.js Clean template guide."""
+    print("\n" + "="*60)
+    print("   Sanity Next.js Clean Template Setup")
+    print("   Following: https://www.sanity.io/templates/nextjs-sanity-clean")
+    print("="*60)
+    
+    # Check authentication first
+    if not check_sanity_cli():
+        print("\n✗ Setup cancelled. Please authenticate with Sanity CLI first.")
+        return
+    
+    project_name = input("\nEnter your project name: ").strip()
+    if not project_name:
+        project_name = "my-sanity-app"
+        print(f"Using default name: {project_name}")
+    
+    # Use parent directory to avoid npm detecting Python framework
+    PYTHON_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+    BUILDER_ROOT = PYTHON_PROJECT_ROOT.parent
     OUTPUT_DIR = BUILDER_ROOT / project_name
-
+    
+    # Check if directory exists
+    if OUTPUT_DIR.exists():
+        print(f"\n⚠️  Directory '{OUTPUT_DIR}' already exists.")
+        overwrite = input("Continue anyway? (y/n): ").strip().lower()
+        if overwrite != 'y':
+            print("Setup cancelled.")
+            return
+    
     OUTPUT_DIR.mkdir(exist_ok=True)
-
-    print(f"\nCreating Next.js frontend in: {OUTPUT_DIR}")
-    run(
-        [
-            "npx",
-            "create-next-app@latest",
-            "frontend",
-            "--ts",
-            "--tailwind",
-            "--app",
-            "--src-dir",
-            "--yes",
-        ],
-        cwd=OUTPUT_DIR,
-    )
-
-    # Prompt for template
-    print("\nSelect Sanity Studio template:")
-    for i, (name, desc) in enumerate(SANITY_TEMPLATES, 1):
-        print(f"  {i}. {desc} (template: {name})")
-
-    template_choice = input("Select template (number): ").strip()
-    try:
-        choice_num = int(template_choice)
-        if 1 > choice_num or choice_num > len(SANITY_TEMPLATES):
-            template_idx = 0
-        else:
-            template_idx = choice_num - 1
-    except ValueError:
-        template_idx = 0
-    template = SANITY_TEMPLATES[template_idx][0]
-    print(f"\n>>> DEBUG: Selected template: '{template}' (choice: '{template_choice}')")
-
-    # Check for existing projects if authenticated
-    projects: list[dict] = []
-    if is_sanity_authenticated():
-        projects = get_sanity_projects()
-    else:
-        print("\n(Sanity CLI not authenticated; skipping project lookup. Run `npx sanity login` or set SANITY_AUTH_TOKEN to enable auto-selection.)")
-
-    project_id = None
-
-    if projects:
-        print(f"\n--- Sanity Projects Found ---")
-        for i, p in enumerate(projects, 1):
-            print(f"  {i}. {p.get('name', 'Unnamed')} ({p.get('projectId', 'N/A')})")
-        print(f"  0. Skip (create manually)")
-
-        proj_choice = input("\nSelect a project (number): ").strip()
-        if proj_choice.isdigit() and 1 <= int(proj_choice) <= len(projects):
-            project_id = projects[int(proj_choice) - 1].get("projectId", "")
-            print(f"  Using project: {project_id}")
-
-    if not project_id:
-        manual_project = input("\nEnter an existing Sanity project ID (leave blank to skip): ").strip()
-        if manual_project:
-            project_id = manual_project
-            print(f"  Using manually provided project: {project_id}")
-
-    # Create studio directory
-    studio_dir = OUTPUT_DIR / "studio"
-    studio_dir.mkdir(exist_ok=True)
-
-    print(f"\n--- Setting up Sanity Studio ---\n")
-    print(f"Creating studio with template: {template}")
-
+    
+    print(f"\n📦 Installing Sanity Next.js Clean template...")
+    print(f"   Location: {OUTPUT_DIR}")
+    print("\n   This will:")
+    print("   • Create a Next.js 16 app with App Router")
+    print("   • Set up Sanity Studio with Visual Editing")
+    print("   • Configure Live Content API")
+    print("   • Add Presentation Tool for real-time editing")
+    print("")
+    
+    # Run the official template installation command
     cmd = [
-        "npx",
+        "npm",
+        "create",
         "sanity@latest",
-        "init",
-        "--no-mcp",
+        "--",
         "--template",
-        template,
-        "--dataset",
-        "production",
+        "sanity-io/sanity-template-nextjs-clean",
         "--output-path",
-        str(studio_dir),
-        "--no-typescript" if template == "clean" else "--typescript",
+        project_name,
+        "--no-mcp",
     ]
-
-    if project_id:
-        cmd.insert(3, "-y")
-        cmd.extend(["--project-id", project_id])
-    else:
-        print(
-            "\nNo project ID detected; running Sanity init interactively so you can log in or create a project."
-        )
-
-    print(f"\n>>> DEBUG: Running command: {' '.join(cmd)}")
-
+    
+    print(f"Running: {' '.join(cmd)}")
+    print("\n" + "-"*60)
+    
     try:
-        run(cmd, cwd=OUTPUT_DIR)
-        print("\n✓ Sanity Studio created successfully!")
+        run(cmd, cwd=BUILDER_ROOT)
+        print("\n" + "-"*60)
+        print("\n✓ Template installed successfully!")
     except subprocess.CalledProcessError as e:
-        print(f"\n✗ Failed to create Sanity Studio (exit {e.returncode})")
-        print("You can create it manually:")
-        print(f"  cd {OUTPUT_DIR / 'studio'}")
-        manual_project = project_id or "YOUR_PROJECT_ID"
-        print(
-            f"  sanity init -- --dataset production --template {template} --project-id {manual_project}"
-        )
+        print(f"\n✗ Template installation failed (exit code {e.returncode})")
+        print("\nYou can try installing manually:")
+        print(f"  cd {BUILDER_ROOT}")
+        print(f"  npm create sanity@latest -- --template sanity-io/sanity-template-nextjs-clean")
+        return
     except Exception as e:
-        print(f"\n✗ Failed to create Sanity Studio: {e}")
-        print("You can create it manually:")
-        print(f"  cd {OUTPUT_DIR / 'studio'}")
-        manual_project = project_id or "YOUR_PROJECT_ID"
-        print(
-            f"  sanity init -- --dataset production --template {template} --project-id {manual_project}"
-        )
-
-    # Try to find project ID from created studio
-    env_path = studio_dir / ".env"
-    if not project_id and env_path.exists():
-        content = env_path.read_text()
-        for line in content.split("\n"):
-            if line.startswith("SANITY_PROJECT_ID="):
-                project_id = line.split("=", 1)[1].strip()
-                break
-
-    # Generate env files
-    write_env_files(OUTPUT_DIR, project_id=project_id)
-
-    setup_visual_editing(OUTPUT_DIR, project_name)
-
-    print(f"\n--- Project Setup Complete! ---\n")
-    print(f"Project: {project_name}")
-    print(f"Location: {OUTPUT_DIR}")
-    print(f"  - Frontend: {OUTPUT_DIR / 'frontend'}")
-    print(f"  - Studio:   {OUTPUT_DIR / 'studio'}")
-
-    print("\n=== ALL DONE ===")
-    print("\nNext steps:")
-    print("1. Update SANITY_VIEWER_TOKEN in frontend/.env.local")
-    print("   Run: npx sanity manage")
-    print("   Create a token with Viewer permission")
-    print("2. Start frontend: cd frontend && npm run dev")
-    print("3. Start studio:   cd studio  && npm run dev")
+        print(f"\n✗ Unexpected error: {e}")
+        return
+    
+    # Extract project configuration
+    config = get_project_config(OUTPUT_DIR)
+    
+    print("\n" + "="*60)
+    print("   Setup Complete!")
+    print("="*60)
+    print(f"\n📁 Project: {project_name}")
+    print(f"   Location: {OUTPUT_DIR}")
+    
+    if config:
+        print(f"\n🔧 Configuration:")
+        print(f"   Project ID: {config.get('projectId', 'N/A')}")
+        print(f"   Dataset: {config.get('dataset', 'production')}")
+        print(f"   Studio URL: https://{config.get('projectId', 'your-project')}.sanity.studio")
+    
+    print("\n📚 What's included:")
+    print("   ✓ Next.js 16 with App Router")
+    print("   ✓ Sanity Studio with Visual Editing")
+    print("   ✓ Live Content API integration")
+    print("   ✓ Presentation Tool for real-time preview")
+    print("   ✓ Pre-configured schema (Page, Post, Person, Settings)")
+    print("   ✓ Drag-and-drop page builder")
+    
+    print("\n🚀 Next Steps:")
+    print(f"\n1. Navigate to your project:")
+    print(f"   cd {OUTPUT_DIR}")
+    
+    print("\n2. Start the development servers:")
+    print("   npm run dev")
+    
+    print("\n3. Open in your browser:")
+    print("   • Next.js app: http://localhost:3000")
+    print("   • Sanity Studio: http://localhost:3333")
+    
+    print("\n4. (Optional) Import sample data:")
+    print("   npm run import-sample-data")
+    
+    print("\n5. Deploy when ready:")
+    print("   • Studio: npx sanity deploy")
+    print("   • Next.js: Deploy to Vercel or your preferred host")
+    
+    print("\n📖 Documentation:")
+    print("   • Template: https://www.sanity.io/templates/nextjs-sanity-clean")
+    print("   • Sanity Docs: https://www.sanity.io/docs")
+    print("   • Visual Editing: https://www.sanity.io/docs/presentation")
+    
+    print("\n" + "="*60)
 
 
 if __name__ == "__main__":
