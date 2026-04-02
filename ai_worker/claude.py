@@ -1,5 +1,8 @@
 import anthropic
 from ai_worker.factory import Factory
+import base64
+import os
+from pathlib import Path
 
 
 class Claude(Factory):
@@ -24,12 +27,64 @@ class Claude(Factory):
         response = self.client.messages.create(**params)
         return response.content[0].text
     
-    def design_sanity_schema_model(self, prompt, schema=None):
+    def _encode_image_to_base64(self, image_path):
+        """Convert image file path to base64 for Claude"""
+        try:
+            # Handle file paths
+            if os.path.isfile(image_path):
+                with open(image_path, 'rb') as image_file:
+                    image_data = image_file.read()
+                    base64_image = base64.b64encode(image_data).decode('utf-8')
+                    
+                    # Detect media type from extension
+                    ext = Path(image_path).suffix.lower()
+                    media_types = {
+                        '.png': 'image/png',
+                        '.jpg': 'image/jpeg',
+                        '.jpeg': 'image/jpeg',
+                        '.gif': 'image/gif',
+                        '.webp': 'image/webp'
+                    }
+                    media_type = media_types.get(ext, 'image/png')
+                    
+                    return base64_image, media_type
+            
+            return None, None
+        except Exception as e:
+            print(f"Warning: Could not encode image {image_path}: {e}")
+            return None, None
+    
+    def design_sanity_schema_model(self, prompt, state):
         """Design sanity schema validation"""
-        messages = [{"role": "user", "content": prompt}]
-        system_prompt = None
-        if schema:
-            system_prompt = "You must respond with valid JSON matching the provided schema."
+        # Truncate raw_node_json to prevent token overflow (max ~2000 chars)
+        raw_json = state.get('raw_node_json', '{}')
+        if len(raw_json) > 2000:
+            raw_json = raw_json[:2000] + "\n... [truncated for token limit]"
+        
+        content = [
+            {"type": "text", "text": prompt},
+            {"type": "text", "text": f"\n\nComponent Metadata:\n- Name: {state.get('component_name', 'Unknown')}\n- Description: {state.get('component_description', 'N/A')}\n- Dimensions: {state.get('width', 0)}x{state.get('height', 0)}"},
+            {"type": "text", "text": f"\n\nFigma JSON Data (truncated if needed):\n{raw_json}"}
+        ]
+        
+        # Add screenshot if available
+        screenshot_path = state.get('figma_screenshot')
+        if screenshot_path:
+            base64_image, media_type = self._encode_image_to_base64(screenshot_path)
+            if base64_image and media_type:
+                content.insert(1, {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": base64_image
+                    }
+                })
+            else:
+                print(f"⚠️  Skipping screenshot for {state.get('component_name')}: could not encode image")
+        
+        messages = [{"role": "user", "content": content}]
+        system_prompt = "You must respond with valid JSON in the exact format specified."
         return self._make_request(messages, system_prompt=system_prompt)
     
     def design_query_model(self, prompt, system_prompt=None):

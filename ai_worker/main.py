@@ -1,9 +1,12 @@
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from ai_worker.factory import Factory
+from ai_worker.component_worker import ComponentState, design_sanity_schema, save_sanity_schema
+from ai_worker.utils.prompts import generate_sanity_schema
 from sqlmodel import Session, select
 from db.migration import SectionComponent, create_db_and_tables
-from playwright_tester import Playwright
+from ai_worker.playwright_tester import Playwright
+from pathlib import Path
 
 def get_ai_client():
     """
@@ -54,7 +57,7 @@ def get_ai_client():
     
     return ai_client
 
-def process_single_component(component_data: dict, ai_client, playwright) -> dict:
+def process_single_component(component_data: dict, ai_client, project_path: str) -> dict:
     """
     Process a single component through the AI workflow.
     This function will be called in parallel for each component.
@@ -62,49 +65,59 @@ def process_single_component(component_data: dict, ai_client, playwright) -> dic
     Args:
         component_data: Dictionary containing component data from database
         ai_client: Initialized AI client (OpenAI, Claude, or Gemini)
-        playwright: Playwright instance for testing
+        project_path: Path to the generated Next.js project
         
     Returns:
         Dictionary with component_data and processing results
     """
     try:
         component_name = component_data["name"]
-        print(f"[{component_name}] Starting processing...")
+        print(f"[{component_name}] Starting sanity schema generation...")
         
-        # TODO: Integrate with component_worker here
-        # Example workflow:
         # 1. Create ComponentState from component_data
-        # initial_state = ComponentState(
-        #     node_id=component_data["node_id"],
-        #     component_name=component_data["name"],
-        #     raw_node_json=component_data["raw_node_json"],
-        #     width=component_data["width"],
-        #     height=component_data["height"],
-        #     figma_screenshot=component_data["screenshot"],
-        #     component_code="",
-        #     query_code="",
-        #     typescript_type_code="",
-        #     sanity_schema_code="",
-        #     done=False
-        # )
-        # 
-        # 2. Run through AI workflow (component_worker.app)
-        # result = app.invoke(initial_state)
-        # 
-        # 3. Test with playwright
-        # test_result = playwright.test_component(result["component_code"])
-        # 
-        # 4. Return results
+        initial_state: ComponentState = {
+            "key": component_data.get("node_id", ""),
+            "node_id": component_data["node_id"],
+            "component_name": component_data["name"],
+            "component_description": "",
+            "raw_node_json": component_data["raw_node_json"],
+            "width": component_data["width"],
+            "height": component_data["height"],
+            "component_set_key": "",
+            "figma_screenshot": component_data["screenshot"],
+            "component_code": "",
+            "query_code": "",
+            "typescript_type_code": "",
+            "sanity_schema_code": "",
+            "sanity_schema_filename": "",
+            "project_path": project_path,
+            "done": False
+        }
         
-        print(f"[{component_name}] Processing complete")
+        # 2. Design sanity schema
+        print(f"[{component_name}] Calling AI to generate schema...")
+        state_after_design = design_sanity_schema(
+            initial_state, 
+            generate_sanity_schema, 
+            ai_client.design_sanity_schema_model
+        )
+        
+        # 3. Save sanity schema
+        print(f"[{component_name}] Saving schema to project...")
+        final_state = save_sanity_schema(state_after_design)
+        
+        print(f"[{component_name}] ✓ Complete - Schema: {final_state.get('sanity_schema_filename', 'unknown')}.ts")
         return {
             "component_data": component_data,
             "status": "success",
-            "error": None
+            "error": None,
+            "schema_filename": final_state.get("sanity_schema_filename", "")
         }
         
     except Exception as e:
-        print(f"[{component_data['name']}] Error: {e}")
+        print(f"[{component_data['name']}] ✗ Error: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "component_data": component_data,
             "status": "error",
@@ -163,17 +176,25 @@ def main():
         # Get AI client from user
         ai_client = get_ai_client()
 
-        components = get_all_components()
+        all_components = get_all_components()
+        
+        # Limit to first 5 components for testing
+        components = all_components[:5]
+        print(f"\n⚠️  Testing mode: Processing only first {len(components)} of {len(all_components)} components")
 
         print("AI client is ready for use!")
         print(f"Provider: {ai_client.provider}")
         print(f"Model: {ai_client.model}")
         
-        # Initialize Playwright for testing
-        playwright = Playwright()
+        # Get project path
+        PYTHON_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+        BUILDER_ROOT = PYTHON_PROJECT_ROOT.parent
+        OUTPUT_DIR = BUILDER_ROOT / "test_project_init" # TODO: do not hardcode this. find a way to manage global state for this project
+        project_path = OUTPUT_DIR
+        print(f"Using project path: {project_path}")
         
         # Process components in parallel
-        max_workers = 5  # Adjust based on API rate limits and system resources
+        max_workers = 3  # Reduced for testing
         results = []
         
         print(f"\n=== Processing {len(components)} components in parallel (max {max_workers} workers) ===")
@@ -181,7 +202,7 @@ def main():
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all component processing tasks
             future_to_component = {
-                executor.submit(process_single_component, comp, ai_client, playwright): comp
+                executor.submit(process_single_component, comp, ai_client, project_path): comp
                 for comp in components
             }
             
@@ -196,7 +217,8 @@ def main():
                     results.append(result)
                     
                     status_symbol = "✓" if result["status"] == "success" else "✗"
-                    print(f"[{completed}/{len(components)}] {status_symbol} {component['name']}")
+                    schema_info = f" ({result.get('schema_filename', 'N/A')}.ts)" if result["status"] == "success" else ""
+                    print(f"[{completed}/{len(components)}] {status_symbol} {component['name']}{schema_info}")
                     
                 except Exception as exc:
                     print(f"[{completed}/{len(components)}] ✗ {component['name']} generated exception: {exc}")
@@ -213,10 +235,16 @@ def main():
         print(f"✓ Successful: {successful}")
         print(f"✗ Failed: {failed}")
         
+        if successful > 0:
+            print(f"\n📁 Schemas saved to: {project_path}/studio/src/schemaTypes/objects/")
+            print(f"📝 Index updated at: {project_path}/studio/src/schemaTypes/index.ts")
+        
         return ai_client
         
     except Exception as e:
         print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 

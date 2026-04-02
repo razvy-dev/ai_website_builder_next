@@ -40,8 +40,8 @@ class Factory(ABC):
         return providers[provider_lower](model, api_key)
 
     @abstractmethod
-    def design_sanity_schema_model(self, prompt, schema=None):
-        """Design sanity schema validation"""
+    def design_sanity_schema_model(self, prompt, state):
+        """Design sanity schema validation - accepts ComponentState with Figma data"""
         pass
 
     @abstractmethod

@@ -1,27 +1,26 @@
 # keeping the prompts here so it is easier to modify them as needed
 
 generate_sanity_schema="""
-You are a frontend web developer tasked with generating a Sanity
-Type Block element for the page this gets rendered on. 
-You should only be returning the schema, in the next format:
+You are a frontend web developer tasked with generating a Sanity Type Block schema for a component.
 
-'''
-import {defineField, defineType} from 'sanity'
+You will be provided with:
+1. A Figma screenshot of the component
+2. Raw Figma JSON data containing the component structure and properties
+3. Component metadata (name, dimensions, etc.)
 
-export const sectionName = defineType({
-  name: 'sectionName',
-  title: 'Section Name',
-  type: 'object',
-  fields: [
-    defineField({
-      name: 'title',
-      title: 'Title',
-      type: 'string',
-    }),
-    // add more fields as needed
-  ],
-})
-'''
+Based on this Figma data, analyze the component and create an appropriate Sanity schema.
+
+You must respond with a JSON object in this exact format:
+{
+  "filename": "camelCaseName",
+  "schema": "import {defineField, defineType} from 'sanity'\\n\\nexport const sectionName = defineType({\\n  name: 'sectionName',\\n  title: 'Section Name',\\n  type: 'object',\\n  fields: [\\n    defineField({\\n      name: 'title',\\n      title: 'Title',\\n      type: 'string',\\n    }),\\n  ],\\n})"
+}
+
+Guidelines:
+- The filename should be camelCase and descriptive of the component
+- The schema should include all relevant fields based on the Figma design
+- Use appropriate Sanity field types (string, text, image, array, etc.)
+- Ensure the schema is complete and ready to use
 """
 
 generate_query="""

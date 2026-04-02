@@ -3,6 +3,7 @@
 
 from project_init.main import main as init_project
 from figma_worker.main import main as figma_integration
+from ai_worker.main import main as ai_component_generation
 
 
 def main():
@@ -12,7 +13,7 @@ def main():
     print("\nSelect functionality:")
     print("1. Initialize new project (Next.js + Sanity + Visual Editing)")
     print("2. Figma integration (we will need you to pass in a file key)")
-    print("3. AI component generation (coming soon)")
+    print("3. AI component generation (Sanity schemas)")
     print("4. Assembly (coming soon)")
     print("\n")
 
@@ -23,7 +24,7 @@ def main():
     elif choice == "2":
         figma_integration()
     elif choice == "3":
-        print("AI component generation not yet implemented.")
+        ai_component_generation()
     elif choice == "4":
         print("Assembly not yet implemented.")
     else:
