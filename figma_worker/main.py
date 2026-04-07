@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from config import settings
 
 
 if __package__ is None or __package__ == "":
@@ -14,14 +15,11 @@ if __package__ is None or __package__ == "":
 else:
     from .figma_connection import FigmaConnection
 
-from config import settings
-
 def main():
     if not settings.figma_api_key:
         raise ValueError("FIGMA_API_KEY not set in environment")
 
-    figma_project_key = str(input("Enter the Figma Project Key: "))
-    figma_project_key = figma_project_key.strip()
+    figma_project_key = settings.figma_file_key
 
     canvas_name = str(input("Enter the Figma Page/Canvas name (leave blank for Delivery): ")).strip()
     start_canvas_name = canvas_name or "Delivery"
@@ -29,7 +27,9 @@ def main():
     figma_connection = FigmaConnection(
         settings.figma_api_key,
         figma_project_key,
+        db_path=settings.project_name,
         start_canvas_name=start_canvas_name,
+        fetch_screenshots=True,
     )
 
     # figma_connection.get_developer_variables()

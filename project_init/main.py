@@ -2,6 +2,7 @@ from pathlib import Path
 import os
 import subprocess
 import sys
+from config import settings
 
 # Add parent directory to path for imports
 if __package__ is None or __package__ == "":
@@ -103,7 +104,7 @@ def get_project_config(project_dir: Path) -> dict | None:
     return None
 
 
-def main():
+def init_project():
     """Main function following official Sanity Next.js Clean template guide."""
     print("\n" + "="*60)
     print("   Sanity Next.js Clean Template Setup")
@@ -116,6 +117,7 @@ def main():
         return
     
     project_name = input("\nEnter your project name: ").strip()
+    description = input("Enter project description: ").strip()
     if not project_name:
         project_name = "my-sanity-app"
         print(f"Using default name: {project_name}")
@@ -244,6 +246,18 @@ def main():
     print("   • Visual Editing: https://www.sanity.io/docs/presentation")
     
     print("\n" + "="*60)
+
+    settings.id = project_name
+    settings.name = project_name
+    settings.description = description
+    settings.project_path = str(OUTPUT_DIR)
+    settings.figma_database_name = ""
+    settings.figma_file_key = ""
+    settings.sanity_project_id = config.get('projectId', '')
+    settings.sanity_dataset = config.get('dataset', 'production')
+    settings.sanity_api_read_token = ""
+    settings.started_at = ""
+    settings.updated_at = ""
 
 
 if __name__ == "__main__":

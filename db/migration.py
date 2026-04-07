@@ -191,16 +191,3 @@ def create_db_and_tables(db_path: str = "figma.db") -> Session:
     SQLModel.metadata.create_all(engine)
     _ensure_section_component_screenshot_column(engine)
     return Session(engine)
-
-
-def _ensure_section_component_screenshot_column(engine) -> None:
-    """Add the screenshot column if it was missing (pre-section-screenshot schema)."""
-
-    with engine.connect() as conn:
-        result = conn.exec_driver_sql("PRAGMA table_info('section_components')").fetchall()
-
-    if any(column[1] == "screenshot" for column in result):
-        return
-
-    with engine.begin() as conn:
-        conn.exec_driver_sql("ALTER TABLE section_components ADD COLUMN screenshot TEXT")
