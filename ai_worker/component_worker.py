@@ -491,10 +491,12 @@ def populate_component_data(state: ComponentState) -> ComponentState:
     Uses global project state for configuration and database for component data.
     """
     from sqlmodel import select
-    from db.migration import SectionComponent, Page, ExtractedImage, create_db_and_tables
+    from db.migration import SectionComponent, Page, ExtractedImage
+    from db.manager import get_project_session
     from ai_worker.utils.figma_extractor import extract_component_data
     from ai_worker.utils.sanity_client import SanityClient
     from ai_worker.utils.global_state import get_state
+    from config import settings
     
     try:
         # Get global project state
@@ -519,7 +521,7 @@ def populate_component_data(state: ComponentState) -> ComponentState:
         # 1. Query database for component, page, and embedded images
         # This uses data already extracted and saved by figma_connection.py
         print("  → Querying database for component data...")
-        session = create_db_and_tables("figma.db")
+        session = get_project_session(settings.id)
         
         try:
             # Find the section component (already has raw_node_json and screenshot)

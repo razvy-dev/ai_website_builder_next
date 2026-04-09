@@ -27,15 +27,11 @@ def ask_what_to_do():
         print("Invalid choice.")
 
 def main():
+    # Get settings database session
+    from db.manager import get_settings_session
+    session = get_settings_session()
 
-    # Create database and tables
-    from db.state import create_db_and_tables
-    session = create_db_and_tables()
-
-    # create the settings object to pass to the workers
-
-    # get all projects
-
+    # Get all projects
     statement = select(Project).order_by(
         Project.started_at
     )

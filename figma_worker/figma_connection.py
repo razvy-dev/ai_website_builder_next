@@ -20,8 +20,8 @@ from db.migration import (
     SectionComponent,
     Variable,
     VariableCollection,
-    create_db_and_tables,
 )
+from db.manager import get_project_session
 
 
 class FigmaConnection:
@@ -29,15 +29,16 @@ class FigmaConnection:
         self,
         figma_token: str,
         figma_project_key: str,
+        project_id: str,
+        start_canvas_name: str = "Delivery",
         batch_size: int = 50,
-        db_path: str = "figma.db",
-        start_canvas_name: str | None = "Delivery",
         fetch_screenshots: bool = True,
     ):
         self.figma_token = figma_token
         self.figma_project_key = figma_project_key
         self.batch_size = batch_size
-        self.session = create_db_and_tables(db_path)
+        self.project_id = project_id
+        self.session = get_project_session(project_id)
         self.data: dict[str, Any] | None = None
         self.images_map: dict[str, str] = {}  # imageRef -> URL mapping
         self.component_keys_by_node_id: dict[str, str] = {}

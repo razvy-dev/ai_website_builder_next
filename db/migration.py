@@ -182,11 +182,5 @@ class Variable(SQLModel, table=True):
 # ─────────────────────────────────────────────────────────────
 # ENGINE & TABLE CREATION
 # ─────────────────────────────────────────────────────────────
-
-def create_db_and_tables(db_path: str = "figma.db") -> Session:
-    engine = create_engine(
-        f"sqlite:///{db_path}",
-        connect_args={"check_same_thread": False},
-    )
-    SQLModel.metadata.create_all(engine)
-    return Session(engine)
+# Note: Database creation is now handled by db.manager.DatabaseManager
+# Use get_project_session(project_id) to get a session for a project database

@@ -20,6 +20,18 @@ def main():
         raise ValueError("FIGMA_API_KEY not set in environment")
 
     figma_project_key = settings.figma_file_key
+    
+    # Prompt for file key if not set
+    if not figma_project_key:
+        print("\n⚠️  Figma file key not set for this project")
+        print("Find it in your Figma URL: https://www.figma.com/design/FILE_KEY_HERE/...")
+        figma_project_key = input("Enter Figma file key: ").strip()
+        if not figma_project_key:
+            raise ValueError("Figma file key is required")
+        
+        # Save it to settings
+        settings.figma_file_key = figma_project_key
+        print(f"✓ Saved Figma file key to project settings")
 
     settings.update_settings()
 
@@ -29,7 +41,7 @@ def main():
     figma_connection = FigmaConnection(
         settings.figma_api_key,
         figma_project_key,
-        db_path=settings.name,
+        project_id=settings.id,
         start_canvas_name=start_canvas_name,
         fetch_screenshots=True,
     )

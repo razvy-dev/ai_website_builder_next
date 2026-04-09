@@ -13,7 +13,8 @@ from ai_worker.component_worker import (
 )
 from ai_worker.utils.prompts import generate_sanity_schema, generate_query, generate_nextjs_component
 from sqlmodel import Session, select
-from db.migration import SectionComponent, create_db_and_tables
+from db.migration import SectionComponent
+from db.manager import get_project_session
 from pathlib import Path
 
 def get_ai_client():
@@ -164,17 +165,17 @@ def process_single_component(component_data: dict, ai_client, project_path: str)
             "error": str(e)
         }
 
-def get_all_components(db_path: str = "figma.db") -> list[dict]:
+def get_all_section_components(project_id: str) -> list[dict]:
     """
     Retrieve all section components from the database.
     
     Args:
-        db_path: Path to the SQLite database file
+        project_id: The project identifier
         
     Returns:
         List of dictionaries containing all section component data
     """
-    session = create_db_and_tables(db_path)
+    session = get_project_session(project_id)
     
     try:
         # Query all section components, ordered by page, frame, and order
